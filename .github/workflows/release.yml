@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+
+permissions: {}
+
+jobs:
+  build-artifacts:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    outputs:
+      tarball-name: ${{ steps.pack.outputs.tarball_name }}
+
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Install dependencies
+        run: bun ci
+
+      - name: Test
+        run: bun run test
+
+      - name: Pack npm tarball
+        id: pack
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          TARBALL_PATH=$(bun pm pack --destination ./artifacts --quiet)
+          TARBALL_NAME=$(basename "$TARBALL_PATH")
+
+          PACK_JSON=$(tar -xOzf "$TARBALL_PATH" package/package.json)
+          PACKAGE_NAME=$(jq -r '.name' <<<"$PACK_JSON")
+          PACKAGE_VERSION=$(jq -r '.version' <<<"$PACK_JSON")
+          TAG_VERSION="${TAG_NAME#v}"
+
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            printf '::error::Version %s does not match packed %s version %s\n' "$TAG_VERSION" "$PACKAGE_NAME" "$PACKAGE_VERSION" >&2
+            exit 1
+          fi
+
+          printf 'tarball_path=%s\n' "$TARBALL_PATH" >> "$GITHUB_OUTPUT"
+          printf 'tarball_name=%s\n' "$TARBALL_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-bundle
+          path: ./artifacts/
+          if-no-files-found: error
+
+  stage-npm:
+    name: Stage on npm
+    runs-on: ubuntu-latest
+    needs: build-artifacts
+
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+
+      - name: Download release bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-bundle
+          path: release-files
+
+      - name: Stage package tarball
+        env:
+          TARBALL_PATH: ./release-files/${{ needs.build-artifacts.outputs.tarball-name }}
+        run: |
+          if [ ! -f "$TARBALL_PATH" ]; then
+            echo "::error::Expected tarball $TARBALL_PATH does not exist"
+            exit 1
+          fi
+
+          npm stage publish "$TARBALL_PATH" --access public --provenance
+
+  draft-github-release:
+    name: Draft GitHub release
+    runs-on: ubuntu-latest
+    needs: stage-npm
+
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-bundle
+          path: release-files
+
+      - name: Create draft release if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists; preserving existing notes."
+          else
+            cat > release-notes.md <<'EOF'
+          TODO: replace this draft text with the reviewed release notes.
+
+          Attached artifacts:
+          - npm tarball
+          EOF
+            gh release create "$TAG_NAME" --draft --verify-tag --title "$TAG_NAME" --notes-file release-notes.md
+          fi
+
+      - name: Attach files to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "${{ github.ref_name }}" release-files/* --clobber
