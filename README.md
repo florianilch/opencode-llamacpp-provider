@@ -1,16 +1,8 @@
-# opencode-llamacpp-provider
+# llama.cpp provider for OpenCode
 
-An OpenCode plugin that discovers models from a llama.cpp server and makes them
-available through the `llamacpp` provider.
+An OpenCode plugin that discovers models from a llama.cpp server.
 
-## Requirements
-
-- OpenCode v2.
-- A llama.cpp server that exposes `/health` and `/v1/models`.
-
-## Install
-
-After the package is published, add it to `opencode.jsonc`:
+### Usage
 
 ```jsonc
 {
@@ -19,7 +11,7 @@ After the package is published, add it to `opencode.jsonc`:
 }
 ```
 
-## Provider settings
+### Provider settings
 
 The default endpoint is `http://127.0.0.1:9931/v1`. Provider settings are optional.
 
@@ -40,8 +32,11 @@ To use another endpoint or an optional API key, set provider settings:
 }
 ```
 
-## License
+### Requirements
 
-[MIT](./LICENSE)
+- OpenCode v2.
+- A llama.cpp server that exposes `/health` and `/v1/models`.
 
-This project is not affiliated with, endorsed by or sponsored by the OpenCode team or llama.cpp.
+### License
+
+MIT. This project is not affiliated with, endorsed by or sponsored by the OpenCode team or llama.cpp.
