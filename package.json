@@ -1,0 +1,51 @@
+{
+  "name": "opencode-llamacpp-provider",
+  "version": "0.1.0",
+  "description": "OpenCode plugin for discovering models from a llama.cpp server",
+  "keywords": [
+    "llama",
+    "llama.cpp",
+    "llamacpp",
+    "llm",
+    "opencode",
+    "opencode-plugin"
+  ],
+  "bugs": {
+    "url": "https://github.com/florianilch/opencode-llamacpp-provider/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/florianilch/opencode-llamacpp-provider.git"
+  },
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint",
+    "lint:extra": "oxlint -W suspicious -W perf; publint",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^2.2.6"
+  },
+  "devDependencies": {
+    "@types/bun": "~1.4.4",
+    "effect": "4.1.0",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.90.0",
+    "oxlint-tsgolint": "^7.0.2005",
+    "publint": "^0.3.25",
+    "typescript": "~7.0.2"
+  },
+  "peerDependencies": {
+    "effect": "^4.1.0"
+  },
+  "packageManager": "bun@1.4.4"
+}
