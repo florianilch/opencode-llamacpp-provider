@@ -94,13 +94,13 @@ export default Plugin.define({
 
           yield* http
             .execute(auth(HttpClientRequest.get(endpoint("/health"))))
-            .pipe(Effect.timeout("1 second"))
+            .pipe(Effect.timeout("15 seconds"))
 
           const inventory = yield* http
             .execute(auth(HttpClientRequest.get(endpoint("/v1/models"))))
             .pipe(
               Effect.flatMap(HttpClientResponse.schemaBodyJson(InventoryResponse)),
-              Effect.timeout("1 second"),
+              Effect.timeout("15 seconds"),
             )
 
           const models = inventory.data
