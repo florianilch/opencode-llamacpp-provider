@@ -84,20 +84,28 @@ describe("model discovery", () => {
       },
     },
     {
-      label: "excludes models with decision output",
+      label: "registers models with decision output",
       serverModel: {
         id: "decision-output",
         architecture: { output_modalities: ["decisions"] },
       },
-      model: undefined,
+      model: {
+        type: "decision",
+        package: "@opencode/ai/providers/openai-compatible/decisions",
+        capabilities: { output: ["decision"] },
+      },
     },
     {
-      label: "excludes models with decision output even when text is also reported",
+      label: "registers decision models when text is also reported",
       serverModel: {
         id: "dual-output",
         architecture: { output_modalities: ["decisions", "text"] },
       },
-      model: undefined,
+      model: {
+        type: "decision",
+        package: "@opencode/ai/providers/openai-compatible/decisions",
+        capabilities: { output: ["decision"] },
+      },
     },
     {
       label: "preserves output types beyond text",
