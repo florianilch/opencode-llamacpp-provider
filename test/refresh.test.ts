@@ -5,8 +5,8 @@ import plugin from "opencode-llamacpp-provider"
 
 import { applyTransforms, createContext, expectReloads } from "./plugin-test-helpers"
 
-describe("LlamaCppPlugin", () => {
-  test("clears discovered models and discovers new models when the server URL changes", async () => {
+describe("inventory refresh", () => {
+  test("clears old models before registering new models when the server URL changes", async () => {
     const sendModelResponseSignal = Promise.withResolvers<void>()
     const modelRequestReceivedSignal = Promise.withResolvers<void>()
     const server = Bun.serve({
@@ -58,7 +58,7 @@ describe("LlamaCppPlugin", () => {
     }
   })
 
-  test("clears discovered models and updates authorization when the API key changes", async () => {
+  test("clears models and uses the new key for discovery when the API key changes", async () => {
     const requests: { path: string; auth: string | null }[] = []
     const sendModelResponseSignal = Promise.withResolvers<void>()
     const modelRequestReceivedSignal = Promise.withResolvers<void>()

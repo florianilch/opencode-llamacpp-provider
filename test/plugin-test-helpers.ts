@@ -1,6 +1,7 @@
 import { expect } from "bun:test"
 
-import { Effect, Queue, Stream } from "effect"
+import { Model, Provider } from "@opencode/plugin/effect"
+import { Effect, Queue, Stream, type Types } from "effect"
 import plugin from "opencode-llamacpp-provider"
 
 type Context = Parameters<typeof plugin.effect>[0]
@@ -48,23 +49,21 @@ export function createContext(
   }
 }
 
-export function applyTransforms(host: ReturnType<typeof createContext>) {
+export function applyTransforms(
+  host: ReturnType<typeof createContext>,
+  initialState: { existingModels?: string[]; integrationID?: string } = {},
+) {
   const transforms = host.transforms()
+  const existingModels = new Map((initialState.existingModels ?? []).map((id) => [id, { id }]))
 
   const removedIntegrations: string[] = []
 
   const removedModels: string[][] = []
   const provider = {
     settings: { ...host.settings },
-    integrationID: "existing" as string | undefined,
+    integrationID: initialState.integrationID,
   }
-  const models = new Map<
-    string,
-    {
-      capabilities: { input: string[]; output: string[] }
-      limit: { context: number; output: number }
-    }
-  >()
+  const models = new Map<string, Types.DeepMutable<Model.Info>>()
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial test double.
   transforms.integration({
@@ -73,7 +72,7 @@ export function applyTransforms(host: ReturnType<typeof createContext>) {
 
   const editor: Pick<Parameters<ProviderTransform>[0], "get" | "update" | "models"> = {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial test double.
-    get: () => ({ models: new Map([["existing-model", { id: "existing-model" }]]) }) as never,
+    get: () => ({ models: existingModels }) as never,
     update: (_id, update) => {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial test double.
       update(provider as never)
@@ -82,13 +81,12 @@ export function applyTransforms(host: ReturnType<typeof createContext>) {
       remove: (id, modelID) => {
         removedModels.push([id, modelID])
       },
-      update: (_providerID, id, update) => {
-        const model = {
-          capabilities: { input: [] as string[], output: [] as string[] },
-          limit: { context: 200_000, output: 32_000 },
-        }
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial test double.
-        update(model as never)
+      update: (providerID, id, update) => {
+        const model: Parameters<typeof update>[0] = Model.Info.default(
+          Provider.ID.make(providerID),
+          Model.ID.make(id),
+        )
+        update(model)
         models.set(id, model)
       },
       set: () => {

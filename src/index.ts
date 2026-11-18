@@ -71,6 +71,7 @@ export default Plugin.define({
       })
       for (const item of loaded.models) {
         providers.models.update(providerID, item.id, (model) => {
+          model.type = "chat"
           model.modelID = Model.ID.make(item.id)
           model.name = modelDisplayName(item.id)
           model.capabilities.input = [...(item.architecture?.input_modalities ?? ["text"])]
@@ -163,15 +164,25 @@ function configured(settings: Provider.Settings | undefined): Source {
 }
 
 /**
- * Excludes download entries and models tagged as embedding or decision.
- * Includes models that are not currently loaded. When output types are
- * available, text must be included.
+ * Excludes download entries, models for embedding/reranking and
+ * decision models. Includes unloaded models. Output types must
+ * include text when reported.
  */
 function isDiscoverableModel(item: DiscoveredModel): boolean {
   if (item.id.length === 0) return false
-  if (["downloading", "downloaded", "incomplete"].includes(item.status?.value ?? "")) return false
-  if (item.tags?.some((tag) => tag === "embedding" || tag === "decision")) return false
-  return item.architecture?.output_modalities?.includes("text") ?? true
+
+  const downloadStatuses = ["downloading", "downloaded", "incomplete"]
+  if (downloadStatuses.includes(item.status?.value ?? "")) return false
+
+  const nonChatArgs = ["--embeddings", "--reranking"]
+  if (item.status?.args?.some((arg) => nonChatArgs.includes(arg))) return false
+
+  const outputs = item.architecture?.output_modalities
+  if (outputs?.includes("decisions")) return false
+  if (outputs?.includes("text")) return true
+  if (!outputs) return true
+
+  return false
 }
 
 /**
