@@ -12,6 +12,7 @@ export function createContext(
   baseURL: string,
   events: Queue.Queue<unknown>,
   reloads: Queue.Queue<string>,
+  app: Context["app"] = { name: "opencode", version: "2.3.0", channel: "latest" },
 ) {
   const settings = { baseURL, apiKey: "" }
   let provider: ProviderTransform | undefined
@@ -19,6 +20,7 @@ export function createContext(
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Partial test double.
   const context = {
+    app,
     provider: {
       get: () => Effect.succeed({ data: { settings } }),
       transform: (callback: ProviderTransform) => {

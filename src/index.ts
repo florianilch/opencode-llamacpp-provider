@@ -41,6 +41,7 @@ export default Plugin.define({
   effect: Effect.fn(function* (ctx) {
     const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
     const discoveryLock = yield* Semaphore.make(1)
+    const supportsDecisionModels = hostSupportsDecisionModels(ctx.app?.version, ctx.app?.channel)
 
     const readSettings = Effect.fn("LlamaCppPlugin.readSettings")(function* () {
       const response = yield* ctx.provider
@@ -71,11 +72,19 @@ export default Plugin.define({
       })
       for (const item of loaded.models) {
         providers.models.update(providerID, item.id, (model) => {
-          model.type = "chat"
+          const isDecisionModel =
+            item.architecture?.output_modalities?.includes("decisions") ?? false
+          model.type = isDecisionModel ? "decision" : "chat"
+          model.package = isDecisionModel
+            ? "@opencode/ai/providers/openai-compatible/decisions"
+            : undefined
           model.modelID = Model.ID.make(item.id)
           model.name = modelDisplayName(item.id)
           model.capabilities.input = [...(item.architecture?.input_modalities ?? ["text"])]
-          model.capabilities.output = [...(item.architecture?.output_modalities ?? ["text"])]
+          model.capabilities.output = isDecisionModel
+            ? // llama.cpp reports "decisions", the model capability uses "decision".
+              ["decision"]
+            : [...(item.architecture?.output_modalities ?? ["text"])]
           model.limit.context = contextLength(item) ?? model.limit.context
           model.limit.output = Math.min(model.limit.output, model.limit.context)
         })
@@ -106,6 +115,11 @@ export default Plugin.define({
 
           const models = inventory.data
             .filter(isDiscoverableModel)
+            .filter(
+              (item) =>
+                supportsDecisionModels ||
+                !item.architecture?.output_modalities?.includes("decisions"),
+            )
             .toSorted((a, b) => a.id.localeCompare(b.id))
           return { source: current, models }
         }),
@@ -144,6 +158,19 @@ export default Plugin.define({
   }, Effect.provide(FetchHttpClient.layer)),
 })
 
+/** Allow decision models on v2.3.0+, unknown versions, and development builds. */
+function hostSupportsDecisionModels(
+  version: string | undefined,
+  channel: string | undefined,
+): boolean {
+  if (channel !== "latest" && channel !== "stable") return true
+  const match = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version ?? "")
+  if (!match) return true
+  const major = Number(match[1])
+  const minor = Number(match[2])
+  return major > 2 || (major === 2 && minor >= 3)
+}
+
 function configured(settings: Provider.Settings | undefined): Source {
   const baseURL = (
     typeof settings?.baseURL === "string" ? settings.baseURL : defaultSettings.baseURL
@@ -164,9 +191,8 @@ function configured(settings: Provider.Settings | undefined): Source {
 }
 
 /**
- * Excludes download entries, models for embedding/reranking and
- * decision models. Includes unloaded models. Output types must
- * include text when reported.
+ * Excludes download entries and models for embedding/reranking.
+ * Includes unloaded models. Reported output types must include text or decisions.
  */
 function isDiscoverableModel(item: DiscoveredModel): boolean {
   if (item.id.length === 0) return false
@@ -178,8 +204,7 @@ function isDiscoverableModel(item: DiscoveredModel): boolean {
   if (item.status?.args?.some((arg) => nonChatArgs.includes(arg))) return false
 
   const outputs = item.architecture?.output_modalities
-  if (outputs?.includes("decisions")) return false
-  if (outputs?.includes("text")) return true
+  if (outputs?.includes("decisions") || outputs?.includes("text")) return true
   if (!outputs) return true
 
   return false
