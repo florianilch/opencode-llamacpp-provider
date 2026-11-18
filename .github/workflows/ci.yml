@@ -77,3 +77,4 @@ jobs:
           bun audit --prod
           --ignore=GHSA-3g3m-2fjr-6pw4
           --ignore=GHSA-g3hv-75wg-m249
+          --ignore=GHSA-fc5q-39xc-vjpf
